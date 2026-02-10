@@ -1,0 +1,20 @@
+name: syncro-mcp
+services:
+  - name: mcp-server
+    dockerfile_path: Dockerfile
+    http_port: 8080
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    health_check:
+      http_path: /health
+    envs:
+      - key: MCP_TRANSPORT
+        value: http
+      - key: AUTH_MODE
+        value: env
+      - key: SYNCRO_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: SYNCRO_SUBDOMAIN
+        scope: RUN_TIME
+        type: SECRET

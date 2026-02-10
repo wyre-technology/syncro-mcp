@@ -7,13 +7,23 @@
  * 2. After user selects a domain, exposes domain-specific tools
  * 3. Lazy-loads domain handlers and the Syncro client
  *
+ * Supports both stdio and HTTP (StreamableHTTPServerTransport) transports.
+ *
  * Credentials are provided via environment variables:
  * - SYNCRO_API_KEY (required)
  * - SYNCRO_SUBDOMAIN (optional)
+ *
+ * Or via gateway headers (when AUTH_MODE=gateway):
+ * - X-Syncro-API-Key
+ * - X-Syncro-Subdomain
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createServer, IncomingMessage, ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
+import type { Server as HttpServer } from "node:http";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -25,6 +35,9 @@ import { getCredentials } from "./utils/client.js";
 
 // Server state
 let currentDomain: DomainName | null = null;
+
+// HTTP server reference for graceful shutdown
+let httpServer: HttpServer | undefined;
 
 // Create the MCP server
 const server = new Server(
@@ -232,11 +245,159 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// Start the server
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Syncro MCP server running on stdio (decision tree mode)");
+/**
+ * Extract gateway credentials from HTTP request headers and set them as env vars.
+ * Returns true if credentials are present, false if the required API key is missing.
+ */
+function applyGatewayCredentials(req: IncomingMessage): boolean {
+  const headers = req.headers as Record<string, string | string[] | undefined>;
+
+  const getHeader = (name: string): string | undefined => {
+    const value = headers[name] || headers[name.toLowerCase()];
+    return Array.isArray(value) ? value[0] : value;
+  };
+
+  const apiKey = getHeader("x-syncro-api-key");
+  const subdomain = getHeader("x-syncro-subdomain");
+
+  if (!apiKey) {
+    return false;
+  }
+
+  // Set env vars so getCredentials() picks them up
+  process.env.SYNCRO_API_KEY = apiKey;
+  if (subdomain) {
+    process.env.SYNCRO_SUBDOMAIN = subdomain;
+  }
+
+  return true;
 }
 
-main().catch(console.error);
+/**
+ * Start the HTTP transport with StreamableHTTPServerTransport.
+ * Supports both env-based and gateway (header-based) credential modes.
+ */
+async function startHttpTransport(): Promise<void> {
+  const port = parseInt(process.env.MCP_HTTP_PORT || "8080", 10);
+  const host = process.env.MCP_HTTP_HOST || "0.0.0.0";
+  const isGatewayMode = process.env.AUTH_MODE === "gateway";
+
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+    enableJsonResponse: true,
+  });
+
+  httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+    const url = new URL(
+      req.url || "/",
+      `http://${req.headers.host || "localhost"}`
+    );
+
+    // Health endpoint - no auth required
+    if (url.pathname === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          status: "ok",
+          transport: "http",
+          authMode: isGatewayMode ? "gateway" : "env",
+          timestamp: new Date().toISOString(),
+        })
+      );
+      return;
+    }
+
+    // MCP endpoint
+    if (url.pathname === "/mcp") {
+      // In gateway mode, extract credentials from headers
+      if (isGatewayMode) {
+        const hasCredentials = applyGatewayCredentials(req);
+        if (!hasCredentials) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: "Missing credentials",
+              message:
+                "Gateway mode requires X-Syncro-API-Key header",
+              required: ["X-Syncro-API-Key"],
+              optional: ["X-Syncro-Subdomain"],
+            })
+          );
+          return;
+        }
+      }
+
+      transport.handleRequest(req, res);
+      return;
+    }
+
+    // 404 for everything else
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({ error: "Not found", endpoints: ["/mcp", "/health"] })
+    );
+  });
+
+  await server.connect(transport);
+
+  await new Promise<void>((resolve) => {
+    httpServer!.listen(port, host, () => {
+      console.error(`Syncro MCP server listening on http://${host}:${port}/mcp`);
+      console.error(
+        `Health check available at http://${host}:${port}/health`
+      );
+      console.error(
+        `Authentication mode: ${isGatewayMode ? "gateway (header-based)" : "env (environment variables)"}`
+      );
+      resolve();
+    });
+  });
+}
+
+/**
+ * Gracefully shut down the server
+ */
+async function shutdown(signal: string): Promise<void> {
+  console.error(`Received ${signal}, shutting down gracefully...`);
+  if (httpServer) {
+    await new Promise<void>((resolve, reject) => {
+      httpServer!.close((err) => (err ? reject(err) : resolve()));
+    });
+  }
+  await server.close();
+  process.exit(0);
+}
+
+// Start the server
+async function main() {
+  const transportType = process.env.MCP_TRANSPORT || "stdio";
+
+  if (transportType === "http") {
+    await startHttpTransport();
+  } else {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Syncro MCP server running on stdio (decision tree mode)");
+  }
+}
+
+// Graceful shutdown handlers
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  process.exit(1);
+});
+
+// Handle uncaught exceptions
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  process.exit(1);
+});
+
+main().catch((error) => {
+  console.error("Failed to start server:", error);
+  process.exit(1);
+});
