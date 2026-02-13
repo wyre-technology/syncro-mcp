@@ -2,6 +2,13 @@
 
 A Model Context Protocol (MCP) server for Syncro MSP, implementing a decision tree architecture for efficient tool navigation.
 
+
+## One-Click Deployment
+
+[![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/wyre-technology/syncro-mcp/tree/main)
+
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/wyre-technology/syncro-mcp)
+
 ## Features
 
 - **Decision Tree Architecture**: Tools are organized by domain and loaded lazily
