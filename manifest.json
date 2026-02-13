@@ -1,0 +1,31 @@
+{
+  "manifest_version": "0.3",
+  "name": "syncro-mcp",
+  "version": "0.0.1",
+  "display_name": "Syncro MCP Server",
+  "description": "Syncro MSP MCP server for Claude",
+  "author": { "name": "Aaron Sachs", "url": "https://github.com/asachs01" },
+  "repository": { "type": "git", "url": "https://github.com/wyre-technology/syncro-mcp" },
+  "homepage": "https://github.com/wyre-technology/syncro-mcp",
+  "license": "MIT",
+  "keywords": ["syncro", "rmm", "psa", "msp", "it-management"],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "SYNCRO_API_KEY": "${user_config.syncro_api_key}",
+        "SYNCRO_SUBDOMAIN": "${user_config.syncro_subdomain}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "syncro_api_key": { "type": "string", "title": "Syncro API Key", "description": "Your Syncro API key", "required": true, "sensitive": true },
+    "syncro_subdomain": { "type": "string", "title": "Syncro Subdomain", "description": "Your Syncro subdomain", "required": false }
+  },
+  "compatibility": { "platforms": ["darwin", "win32", "linux"], "runtimes": { "node": ">=18.0.0" }, "claude_desktop": ">=0.10.0" }
+}
