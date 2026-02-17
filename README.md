@@ -317,7 +317,7 @@ Email an invoice to the customer.
 
 ## Rate Limiting
 
-Syncro API has a rate limit of 180 requests per minute. The underlying `@asachs01/node-syncro` library handles rate limiting automatically.
+Syncro API has a rate limit of 180 requests per minute. The underlying `@wyre-technology/node-syncro` library handles rate limiting automatically.
 
 ## Development
 
