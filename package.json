@@ -43,7 +43,7 @@
   "homepage": "https://github.com/wyre-technology/syncro-mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.3",
-    "@asachs01/node-syncro": "^1.0.0"
+    "@wyre-technology/node-syncro": "^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
