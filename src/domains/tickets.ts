@@ -7,6 +7,7 @@
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { DomainHandler, CallToolResult } from "../utils/types.js";
 import { getClient } from "../utils/client.js";
+import { elicitSelection } from "../utils/elicitation.js";
 
 /**
  * Get ticket domain tools
@@ -203,6 +204,38 @@ async function handleCall(
 
   switch (toolName) {
     case "syncro_tickets_list": {
+      let since = args.since as string | undefined;
+
+      // If no filters provided, elicit a date range from the user
+      const hasFilters =
+        args.customer_id || args.contact_id || args.status || args.user_id ||
+        args.problem_type || args.resolved !== undefined || args.query || args.since;
+
+      if (!hasFilters) {
+        const selection = await elicitSelection(
+          "No filters provided. Would you like to narrow the ticket list by date range?",
+          "date_range",
+          [
+            { value: "today", label: "Today" },
+            { value: "past_week", label: "Past week" },
+            { value: "past_month", label: "Past month" },
+            { value: "all", label: "All tickets (no date filter)" },
+          ]
+        );
+
+        if (selection && selection !== "all") {
+          const now = new Date();
+          if (selection === "today") {
+            now.setHours(0, 0, 0, 0);
+          } else if (selection === "past_week") {
+            now.setDate(now.getDate() - 7);
+          } else if (selection === "past_month") {
+            now.setMonth(now.getMonth() - 1);
+          }
+          since = now.toISOString();
+        }
+      }
+
       const response = await client.tickets.list({
         customer_id: args.customer_id as number | undefined,
         contact_id: args.contact_id as number | undefined,
@@ -211,7 +244,7 @@ async function handleCall(
         problem_type: args.problem_type as string | undefined,
         resolved: args.resolved as boolean | undefined,
         query: args.query as string | undefined,
-        since: args.since as string | undefined,
+        since,
         page: args.page as number | undefined,
         perPage: args.per_page as number | undefined,
       });

@@ -7,6 +7,7 @@
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { DomainHandler, CallToolResult } from "../utils/types.js";
 import { getClient } from "../utils/client.js";
+import { elicitText } from "../utils/elicitation.js";
 
 /**
  * Get customer domain tools
@@ -156,8 +157,26 @@ async function handleCall(
 
   switch (toolName) {
     case "syncro_customers_list": {
+      let query = args.query as string | undefined;
+
+      // If no filters provided, elicit a search term from the user
+      const hasFilters =
+        args.query || args.business_name || args.email || args.phone;
+
+      if (!hasFilters) {
+        const searchTerm = await elicitText(
+          "No search filters provided. Would you like to search for a specific customer?",
+          "search",
+          "Enter a customer name, email, or keyword to search"
+        );
+
+        if (searchTerm) {
+          query = searchTerm;
+        }
+      }
+
       const response = await client.customers.list({
-        query: args.query as string | undefined,
+        query,
         business_name: args.business_name as string | undefined,
         email: args.email as string | undefined,
         phone: args.phone as string | undefined,
