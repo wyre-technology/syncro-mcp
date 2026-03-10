@@ -1,3 +1,10 @@
+## [1.1.3](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.2...v1.1.3) (2026-03-10)
+
+
+### Bug Fixes
+
+* **ci:** add contents:write permission for MCPB upload ([ed14585](https://github.com/wyre-technology/syncro-mcp/commit/ed1458521c699f722b6d2dec71816cd78e64555e))
+
 ## [1.1.2](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.1...v1.1.2) (2026-03-10)
 
 
