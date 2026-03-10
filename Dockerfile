@@ -16,7 +16,13 @@ COPY package*.json ./
 COPY .npmrc ./
 
 # Install dependencies (--ignore-scripts prevents 'prepare' from running before source is copied)
-RUN npm ci --ignore-scripts
+# Mount the NPM_TOKEN secret for GitHub Packages authentication
+RUN --mount=type=secret,id=NPM_TOKEN \
+    if [ -f /run/secrets/NPM_TOKEN ]; then \
+      echo "//npm.pkg.github.com/:_authToken=$(cat /run/secrets/NPM_TOKEN)" >> .npmrc; \
+    fi && \
+    npm ci --ignore-scripts && \
+    sed -i '/_authToken/d' .npmrc
 
 # Copy source code
 COPY . .
@@ -36,6 +42,7 @@ WORKDIR /app
 
 # Copy package files and built application from builder stage
 COPY package*.json ./
+COPY .npmrc ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 
