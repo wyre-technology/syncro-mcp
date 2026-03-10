@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.1...v1.1.2) (2026-03-10)
+
+
+### Bug Fixes
+
+* **ci:** install deps before MCPB pack step in docker job ([9292693](https://github.com/wyre-technology/syncro-mcp/commit/929269352dba926610959ee468566b0e4258e213))
+
 ## [1.1.1](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.0...v1.1.1) (2026-03-10)
 
 
