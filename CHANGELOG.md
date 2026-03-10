@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/wyre-technology/syncro-mcp/compare/v1.0.0...v1.1.0) (2026-03-10)
+
+
+### Features
+
+* **elicitation:** add MCP elicitation support with graceful fallback ([14ca9ef](https://github.com/wyre-technology/syncro-mcp/commit/14ca9ef060ddfcf4546e7be330b8e2db21ed7c79))
+
 # 1.0.0 (2026-03-02)
 
 
