@@ -114,6 +114,16 @@ jobs:
             echo "released=false" >> $GITHUB_OUTPUT
           fi
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Configure npm for GitHub Packages
+        run: |
+          echo "@wyre-technology:registry=https://npm.pkg.github.com" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
+      - name: Install dependencies for MCPB pack
+        run: npm ci
       - name: Pack and upload MCPB bundle
         if: steps.release-check.outputs.released == 'true'
         env:
