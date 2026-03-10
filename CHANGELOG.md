@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.0...v1.1.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* **docker:** pass GitHub Packages auth token to Docker build via BuildKit secret ([c0c3a9e](https://github.com/wyre-technology/syncro-mcp/commit/c0c3a9ec720aa8e513d9c713f3304c20344da00b))
+
 # [1.1.0](https://github.com/wyre-technology/syncro-mcp/compare/v1.0.0...v1.1.0) (2026-03-10)
 
 
