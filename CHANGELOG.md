@@ -1,3 +1,10 @@
+## [1.1.4](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.3...v1.1.4) (2026-04-03)
+
+
+### Bug Fixes
+
+* **deploy:** replace node_compat with nodejs_compat for Wrangler v4 ([13b5e11](https://github.com/wyre-technology/syncro-mcp/commit/13b5e11d0cbd4f60ab67608aee7ce9fe36fe2554))
+
 ## [1.1.3](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.2...v1.1.3) (2026-03-10)
 
 
