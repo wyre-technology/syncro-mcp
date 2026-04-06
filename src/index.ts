@@ -22,8 +22,6 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
-import type { Server as HttpServer } from "node:http";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -33,26 +31,6 @@ import { getDomainHandler, getAvailableDomains } from "./domains/index.js";
 import { isDomainName, type DomainName } from "./utils/types.js";
 import { getCredentials } from "./utils/client.js";
 import { setServerRef } from "./utils/server-ref.js";
-
-// Server state
-let currentDomain: DomainName | null = null;
-
-// HTTP server reference for graceful shutdown
-let httpServer: HttpServer | undefined;
-
-// Create the MCP server
-const server = new Server(
-  {
-    name: "syncro-mcp",
-    version: "1.0.0",
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
-);
-setServerRef(server);
 
 /**
  * Navigation tool - always available
@@ -101,151 +79,156 @@ const statusTool: Tool = {
 };
 
 /**
- * Get tools based on current navigation state
+ * Create a fresh MCP server instance with all handlers registered.
+ * Called once for stdio, or per-request for HTTP transport.
  */
-async function getToolsForState(): Promise<Tool[]> {
-  // Always include status tool
-  const tools: Tool[] = [statusTool];
+function createMcpServer(): Server {
+  let currentDomain: DomainName | null = null;
 
-  if (currentDomain === null) {
-    // At the root - show navigation tool
-    tools.unshift(navigateTool);
-  } else {
-    // In a domain - show back tool and domain-specific tools
-    tools.unshift(backTool);
-
-    const handler = await getDomainHandler(currentDomain);
-    const domainTools = handler.getTools();
-    tools.push(...domainTools);
-  }
-
-  return tools;
-}
-
-// Handle ListTools requests
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  const tools = await getToolsForState();
-  return { tools };
-});
-
-// Handle CallTool requests
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
-  try {
-    // Handle navigation
-    if (name === "syncro_navigate") {
-      const domain = (args as { domain: string }).domain;
-
-      if (!isDomainName(domain)) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Invalid domain: ${domain}. Available domains: ${getAvailableDomains().join(", ")}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      // Check credentials before navigating
-      const creds = getCredentials();
-      if (!creds) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "Error: No API credentials configured. Please set SYNCRO_API_KEY environment variable.",
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      currentDomain = domain;
-
-      // Get tools for the new domain
-      const handler = await getDomainHandler(domain);
-      const domainTools = handler.getTools();
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Navigated to ${domain} domain.\n\nAvailable tools:\n${domainTools
-              .map((t) => `- ${t.name}: ${t.description}`)
-              .join("\n")}\n\nUse syncro_back to return to the main menu.`,
-          },
-        ],
-      };
+  const server = new Server(
+    {
+      name: "syncro-mcp",
+      version: "1.0.0",
+    },
+    {
+      capabilities: {
+        tools: {},
+      },
     }
+  );
+  setServerRef(server);
 
-    // Handle back navigation
-    if (name === "syncro_back") {
-      const previousDomain = currentDomain;
-      currentDomain = null;
+  async function getToolsForState(): Promise<Tool[]> {
+    const tools: Tool[] = [statusTool];
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Navigated back from ${previousDomain || "root"} to the main menu.\n\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nUse syncro_navigate to select a domain.`,
-          },
-        ],
-      };
-    }
-
-    // Handle status
-    if (name === "syncro_status") {
-      const creds = getCredentials();
-      const credStatus = creds
-        ? `Configured${creds.subdomain ? ` (subdomain: ${creds.subdomain})` : ""}`
-        : "NOT CONFIGURED - Please set SYNCRO_API_KEY environment variable";
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Syncro MCP Server Status\n\nCurrent domain: ${currentDomain || "(none - at main menu)"}\nCredentials: ${credStatus}\nAvailable domains: ${getAvailableDomains().join(", ")}\nRate limit: 180 requests/minute`,
-          },
-        ],
-      };
-    }
-
-    // Handle domain-specific tools
-    if (currentDomain !== null) {
+    if (currentDomain === null) {
+      tools.unshift(navigateTool);
+    } else {
+      tools.unshift(backTool);
       const handler = await getDomainHandler(currentDomain);
-
-      // Check if the tool belongs to this domain
       const domainTools = handler.getTools();
-      const toolExists = domainTools.some((t) => t.name === name);
-
-      if (toolExists) {
-        return await handler.handleCall(name, args as Record<string, unknown>);
-      }
+      tools.push(...domainTools);
     }
 
-    // Tool not found
-    return {
-      content: [
-        {
-          type: "text",
-          text: currentDomain
-            ? `Unknown tool: ${name}. You are currently in the ${currentDomain} domain. Use syncro_back to return to the main menu.`
-            : `Unknown tool: ${name}. Use syncro_navigate to select a domain first.`,
-        },
-      ],
-      isError: true,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      content: [{ type: "text", text: `Error: ${message}` }],
-      isError: true,
-    };
+    return tools;
   }
-});
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    const tools = await getToolsForState();
+    return { tools };
+  });
+
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+
+    try {
+      if (name === "syncro_navigate") {
+        const domain = (args as { domain: string }).domain;
+
+        if (!isDomainName(domain)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Invalid domain: ${domain}. Available domains: ${getAvailableDomains().join(", ")}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const creds = getCredentials();
+        if (!creds) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Error: No API credentials configured. Please set SYNCRO_API_KEY environment variable.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        currentDomain = domain;
+
+        const handler = await getDomainHandler(domain);
+        const domainTools = handler.getTools();
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Navigated to ${domain} domain.\n\nAvailable tools:\n${domainTools
+                .map((t) => `- ${t.name}: ${t.description}`)
+                .join("\n")}\n\nUse syncro_back to return to the main menu.`,
+            },
+          ],
+        };
+      }
+
+      if (name === "syncro_back") {
+        const previousDomain = currentDomain;
+        currentDomain = null;
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Navigated back from ${previousDomain || "root"} to the main menu.\n\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nUse syncro_navigate to select a domain.`,
+            },
+          ],
+        };
+      }
+
+      if (name === "syncro_status") {
+        const creds = getCredentials();
+        const credStatus = creds
+          ? `Configured${creds.subdomain ? ` (subdomain: ${creds.subdomain})` : ""}`
+          : "NOT CONFIGURED - Please set SYNCRO_API_KEY environment variable";
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Syncro MCP Server Status\n\nCurrent domain: ${currentDomain || "(none - at main menu)"}\nCredentials: ${credStatus}\nAvailable domains: ${getAvailableDomains().join(", ")}\nRate limit: 180 requests/minute`,
+            },
+          ],
+        };
+      }
+
+      if (currentDomain !== null) {
+        const handler = await getDomainHandler(currentDomain);
+        const domainTools = handler.getTools();
+        const toolExists = domainTools.some((t) => t.name === name);
+
+        if (toolExists) {
+          return await handler.handleCall(name, args as Record<string, unknown>);
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: currentDomain
+              ? `Unknown tool: ${name}. You are currently in the ${currentDomain} domain. Use syncro_back to return to the main menu.`
+              : `Unknown tool: ${name}. Use syncro_navigate to select a domain first.`,
+          },
+        ],
+        isError: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: "text", text: `Error: ${message}` }],
+        isError: true,
+      };
+    }
+  });
+
+  return server;
+}
 
 /**
  * Extract gateway credentials from HTTP request headers and set them as env vars.
@@ -266,7 +249,6 @@ function applyGatewayCredentials(req: IncomingMessage): boolean {
     return false;
   }
 
-  // Set env vars so getCredentials() picks them up
   process.env.SYNCRO_API_KEY = apiKey;
   if (subdomain) {
     process.env.SYNCRO_SUBDOMAIN = subdomain;
@@ -277,19 +259,14 @@ function applyGatewayCredentials(req: IncomingMessage): boolean {
 
 /**
  * Start the HTTP transport with StreamableHTTPServerTransport.
- * Supports both env-based and gateway (header-based) credential modes.
+ * Each request gets a fresh Server + Transport (stateless).
  */
 async function startHttpTransport(): Promise<void> {
   const port = parseInt(process.env.MCP_HTTP_PORT || "8080", 10);
   const host = process.env.MCP_HTTP_HOST || "0.0.0.0";
   const isGatewayMode = process.env.AUTH_MODE === "gateway";
 
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-    enableJsonResponse: true,
-  });
-
-  httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+  const httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(
       req.url || "/",
       `http://${req.headers.host || "localhost"}`
@@ -311,7 +288,6 @@ async function startHttpTransport(): Promise<void> {
 
     // MCP endpoint
     if (url.pathname === "/mcp") {
-      // In gateway mode, extract credentials from headers
       if (isGatewayMode) {
         const hasCredentials = applyGatewayCredentials(req);
         if (!hasCredentials) {
@@ -329,7 +305,21 @@ async function startHttpTransport(): Promise<void> {
         }
       }
 
-      transport.handleRequest(req, res);
+      // Create fresh server + transport per request (stateless)
+      const server = createMcpServer();
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+      });
+
+      res.on("close", () => {
+        transport.close();
+        server.close();
+      });
+
+      server.connect(transport).then(() => {
+        transport.handleRequest(req, res);
+      });
       return;
     }
 
@@ -340,10 +330,8 @@ async function startHttpTransport(): Promise<void> {
     );
   });
 
-  await server.connect(transport);
-
   await new Promise<void>((resolve) => {
-    httpServer!.listen(port, host, () => {
+    httpServer.listen(port, host, () => {
       console.error(`Syncro MCP server listening on http://${host}:${port}/mcp`);
       console.error(
         `Health check available at http://${host}:${port}/health`
@@ -354,20 +342,18 @@ async function startHttpTransport(): Promise<void> {
       resolve();
     });
   });
-}
 
-/**
- * Gracefully shut down the server
- */
-async function shutdown(signal: string): Promise<void> {
-  console.error(`Received ${signal}, shutting down gracefully...`);
-  if (httpServer) {
+  // Graceful shutdown
+  const shutdown = async (signal: string) => {
+    console.error(`Received ${signal}, shutting down gracefully...`);
     await new Promise<void>((resolve, reject) => {
-      httpServer!.close((err) => (err ? reject(err) : resolve()));
+      httpServer.close((err) => (err ? reject(err) : resolve()));
     });
-  }
-  await server.close();
-  process.exit(0);
+    process.exit(0);
+  };
+
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
 // Start the server
@@ -377,15 +363,12 @@ async function main() {
   if (transportType === "http") {
     await startHttpTransport();
   } else {
+    const server = createMcpServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("Syncro MCP server running on stdio (decision tree mode)");
   }
 }
-
-// Graceful shutdown handlers
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
