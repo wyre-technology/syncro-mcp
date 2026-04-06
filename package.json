@@ -1,6 +1,6 @@
 {
   "name": "@wyre-technology/syncro-mcp",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Syncro MSP MCP server for Claude",
   "type": "module",
   "main": "dist/index.js",

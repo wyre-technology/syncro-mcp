@@ -1,3 +1,10 @@
+## [1.1.5](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.4...v1.1.5) (2026-04-06)
+
+
+### Bug Fixes
+
+* per-request MCP Server+Transport for gateway compatibility ([3f8f15e](https://github.com/wyre-technology/syncro-mcp/commit/3f8f15ecbfb3f6e8942c55ec3ea28a64635d8ec4))
+
 ## [1.1.4](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.3...v1.1.4) (2026-04-03)
 
 
