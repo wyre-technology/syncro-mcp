@@ -1,3 +1,10 @@
+## [1.1.6](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.5...v1.1.6) (2026-04-07)
+
+
+### Bug Fixes
+
+* **ci:** deploy :latest tag, force revision via env var bump ([130fe78](https://github.com/wyre-technology/syncro-mcp/commit/130fe785824f58ad666ff662372e306a9f746ddc))
+
 ## [1.1.5](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.4...v1.1.5) (2026-04-06)
 
 
