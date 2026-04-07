@@ -158,7 +158,7 @@ jobs:
           gh release upload "v${{ steps.release-check.outputs.version }}" "${BUNDLE_NAME}.mcpb" \
             --repo ${{ github.repository }} --clobber
       - name: Discord release notification
-        if: steps.release-check.outputs.released == 'true'
+        if: false  # disabled - too noisy, re-enable later
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
