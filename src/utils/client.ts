@@ -6,6 +6,7 @@
  */
 
 import type { SyncroClient } from "@wyre-technology/node-syncro";
+import { getRequestCredentials } from "./credential-store.js";
 
 export interface SyncroCredentials {
   apiKey: string;
@@ -16,9 +17,17 @@ let _client: SyncroClient | null = null;
 let _credentials: SyncroCredentials | null = null;
 
 /**
- * Get credentials from environment variables
+ * Get credentials from the per-request store (gateway mode) or
+ * environment variables (stdio / env mode).
  */
 export function getCredentials(): SyncroCredentials | null {
+  // Per-request credentials take priority (gateway HTTP mode)
+  const reqCreds = getRequestCredentials();
+  if (reqCreds) {
+    return reqCreds;
+  }
+
+  // Fall back to environment variables
   const apiKey = process.env.SYNCRO_API_KEY;
   const subdomain = process.env.SYNCRO_SUBDOMAIN;
 

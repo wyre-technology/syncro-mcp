@@ -31,6 +31,7 @@ import { getDomainHandler, getAvailableDomains } from "./domains/index.js";
 import { isDomainName, type DomainName } from "./utils/types.js";
 import { getCredentials } from "./utils/client.js";
 import { setServerRef } from "./utils/server-ref.js";
+import { credentialStore } from "./utils/credential-store.js";
 
 /**
  * Navigation tool - always available
@@ -231,10 +232,10 @@ function createMcpServer(): Server {
 }
 
 /**
- * Extract gateway credentials from HTTP request headers and set them as env vars.
- * Returns true if credentials are present, false if the required API key is missing.
+ * Extract gateway credentials from HTTP request headers.
+ * Returns the credentials object if present, or null if the required API key is missing.
  */
-function applyGatewayCredentials(req: IncomingMessage): boolean {
+function extractGatewayCredentials(req: IncomingMessage): { apiKey: string; subdomain?: string } | null {
   const headers = req.headers as Record<string, string | string[] | undefined>;
 
   const getHeader = (name: string): string | undefined => {
@@ -243,18 +244,10 @@ function applyGatewayCredentials(req: IncomingMessage): boolean {
   };
 
   const apiKey = getHeader("x-syncro-api-key");
+  if (!apiKey) return null;
+
   const subdomain = getHeader("x-syncro-subdomain");
-
-  if (!apiKey) {
-    return false;
-  }
-
-  process.env.SYNCRO_API_KEY = apiKey;
-  if (subdomain) {
-    process.env.SYNCRO_SUBDOMAIN = subdomain;
-  }
-
-  return true;
+  return { apiKey, ...(subdomain ? { subdomain } : {}) };
 }
 
 /**
@@ -288,9 +281,13 @@ async function startHttpTransport(): Promise<void> {
 
     // MCP endpoint
     if (url.pathname === "/mcp") {
+      // Extract per-request credentials from headers (gateway mode).
+      // Credentials are stored in AsyncLocalStorage so concurrent
+      // requests are isolated — no process.env mutation.
+      let gatewayCreds: { apiKey: string; subdomain?: string } | null = null;
       if (isGatewayMode) {
-        const hasCredentials = applyGatewayCredentials(req);
-        if (!hasCredentials) {
+        gatewayCreds = extractGatewayCredentials(req);
+        if (!gatewayCreds) {
           res.writeHead(401, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
@@ -305,21 +302,28 @@ async function startHttpTransport(): Promise<void> {
         }
       }
 
-      // Create fresh server + transport per request (stateless)
-      const server = createMcpServer();
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true,
-      });
+      const handleMcp = () => {
+        const server = createMcpServer();
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
+          enableJsonResponse: true,
+        });
 
-      res.on("close", () => {
-        transport.close();
-        server.close();
-      });
+        res.on("close", () => {
+          transport.close();
+          server.close();
+        });
 
-      server.connect(transport).then(() => {
-        transport.handleRequest(req, res);
-      });
+        server.connect(transport).then(() => {
+          transport.handleRequest(req, res);
+        });
+      };
+
+      if (gatewayCreds) {
+        credentialStore.run(gatewayCreds, handleMcp);
+      } else {
+        handleMcp();
+      }
       return;
     }
 
