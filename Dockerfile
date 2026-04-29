@@ -96,3 +96,4 @@ LABEL org.opencontainers.image.documentation="https://github.com/wyre-technology
 LABEL org.opencontainers.image.url="https://github.com/wyre-technology/syncro-mcp/pkgs/container/syncro-mcp"
 LABEL org.opencontainers.image.vendor="Wyre Technology"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL io.modelcontextprotocol.server.name="io.github.wyre-technology/syncro-mcp"
