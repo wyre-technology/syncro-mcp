@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Syncro MSP MCP Server with Decision Tree Architecture
+ * Syncro MSP MCP Server
  *
- * This MCP server uses a hierarchical tool loading approach:
- * 1. Initially exposes only a navigation tool
- * 2. After user selects a domain, exposes domain-specific tools
- * 3. Lazy-loads domain handlers and the Syncro client
+ * This MCP server provides tools for interacting with the Syncro API.
+ * All tools are listed upfront so they work with every MCP client, including
+ * remote connectors (claude.ai, mcp-remote) that do not support dynamic
+ * tool-list changes. A helper `syncro_navigate` tool provides domain
+ * discovery and guidance.
  *
  * Supports both stdio and HTTP (StreamableHTTPServerTransport) transports.
  *
@@ -34,20 +35,40 @@ import { setServerRef } from "./utils/server-ref.js";
 import { credentialStore } from "./utils/credential-store.js";
 
 /**
- * Navigation tool - always available
+ * Domain metadata for navigation
+ */
+const domainDescriptions: Record<DomainName, string> = {
+  customers: "Customer management - list, get, create, and update customer accounts and information",
+  tickets: "Ticket management - list, get, create, and update support tickets and workflow",
+  assets: "Asset management - list and get hardware/software assets and configuration items",
+  contacts: "Contact management - list, get, create, and update customer contacts and relationships",
+  invoices: "Invoice management - list and get billing and invoice information",
+};
+
+/**
+ * Navigation / discovery tool - helps the LLM find the right tools
+ *
+ * This is a stateless helper that describes available tools for a domain.
+ * All domain tools are always listed in tools/list regardless of navigation
+ * state, because many MCP clients (claude.ai connectors, mcp-remote) only
+ * fetch the tool list once and do not support notifications/tools/list_changed.
  */
 const navigateTool: Tool = {
   name: "syncro_navigate",
   description:
-    "Navigate to a Syncro domain to access its tools. Available domains: customers (manage customer accounts), tickets (manage support tickets), assets (manage configuration items/devices), contacts (manage customer contacts), invoices (view and manage billing).",
+    "Discover available Syncro tools by domain. Returns tool names and descriptions for the selected domain. All tools are callable at any time — this is a help/discovery aid, not a prerequisite.",
   inputSchema: {
     type: "object",
     properties: {
       domain: {
         type: "string",
         enum: getAvailableDomains(),
-        description:
-          "The domain to navigate to. Choose: customers, tickets, assets, contacts, or invoices",
+        description: `The domain to explore:
+- customers: ${domainDescriptions.customers}
+- tickets: ${domainDescriptions.tickets}
+- assets: ${domainDescriptions.assets}
+- contacts: ${domainDescriptions.contacts}
+- invoices: ${domainDescriptions.invoices}`,
       },
     },
     required: ["domain"],
@@ -55,11 +76,11 @@ const navigateTool: Tool = {
 };
 
 /**
- * Back navigation tool - available when in a domain
+ * Status tool - shows credentials status and available domains
  */
-const backTool: Tool = {
-  name: "syncro_back",
-  description: "Navigate back to the main menu to select a different domain",
+const statusTool: Tool = {
+  name: "syncro_status",
+  description: "Show credentials status and available domains",
   inputSchema: {
     type: "object",
     properties: {},
@@ -67,25 +88,44 @@ const backTool: Tool = {
 };
 
 /**
- * Status tool - shows current navigation state
+ * Map from domain name to its tool definitions (loaded lazily)
  */
-const statusTool: Tool = {
-  name: "syncro_status",
-  description:
-    "Show current navigation state and available domains. Also verifies API credentials are configured.",
-  inputSchema: {
-    type: "object",
-    properties: {},
-  },
-};
+const domainToolMap = new Map<DomainName, Tool[]>();
+
+/**
+ * All domain tools, collected once at startup
+ */
+let allDomainTools: Tool[] | null = null;
+
+/**
+ * Load all domain tools (lazy-loaded on first access)
+ */
+async function getAllDomainTools(): Promise<Tool[]> {
+  if (allDomainTools !== null) {
+    return allDomainTools;
+  }
+
+  const domains = getAvailableDomains();
+  const tools: Tool[] = [];
+
+  for (const domain of domains) {
+    if (!domainToolMap.has(domain)) {
+      const handler = await getDomainHandler(domain);
+      const domainTools = handler.getTools();
+      domainToolMap.set(domain, domainTools);
+    }
+    tools.push(...domainToolMap.get(domain)!);
+  }
+
+  allDomainTools = tools;
+  return tools;
+}
 
 /**
  * Create a fresh MCP server instance with all handlers registered.
  * Called once for stdio, or per-request for HTTP transport.
  */
 function createMcpServer(): Server {
-  let currentDomain: DomainName | null = null;
-
   const server = new Server(
     {
       name: "syncro-mcp",
@@ -99,32 +139,24 @@ function createMcpServer(): Server {
   );
   setServerRef(server);
 
-  async function getToolsForState(): Promise<Tool[]> {
-    const tools: Tool[] = [statusTool];
-
-    if (currentDomain === null) {
-      tools.unshift(navigateTool);
-    } else {
-      tools.unshift(backTool);
-      const handler = await getDomainHandler(currentDomain);
-      const domainTools = handler.getTools();
-      tools.push(...domainTools);
-    }
-
-    return tools;
-  }
-
+  /**
+   * Handle ListTools requests - always returns ALL tools
+   */
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const tools = await getToolsForState();
-    return { tools };
+    const domainTools = await getAllDomainTools();
+    return { tools: [navigateTool, statusTool, ...domainTools] };
   });
 
+  /**
+   * Handle CallTool requests
+   */
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     try {
+      // Handle navigation / discovery helper
       if (name === "syncro_navigate") {
-        const domain = (args as { domain: string }).domain;
+        const { domain } = args as { domain: DomainName };
 
         if (!isDomainName(domain)) {
           return {
@@ -138,45 +170,18 @@ function createMcpServer(): Server {
           };
         }
 
-        const creds = getCredentials();
-        if (!creds) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: "Error: No API credentials configured. Please set SYNCRO_API_KEY environment variable.",
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        currentDomain = domain;
-
         const handler = await getDomainHandler(domain);
-        const domainTools = handler.getTools();
+        const tools = handler.getTools();
+
+        const toolSummary = tools
+          .map((t) => `- ${t.name}: ${t.description}`)
+          .join("\n");
 
         return {
           content: [
             {
               type: "text",
-              text: `Navigated to ${domain} domain.\n\nAvailable tools:\n${domainTools
-                .map((t) => `- ${t.name}: ${t.description}`)
-                .join("\n")}\n\nUse syncro_back to return to the main menu.`,
-            },
-          ],
-        };
-      }
-
-      if (name === "syncro_back") {
-        const previousDomain = currentDomain;
-        currentDomain = null;
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Navigated back from ${previousDomain || "root"} to the main menu.\n\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nUse syncro_navigate to select a domain.`,
+              text: `${domainDescriptions[domain]}\n\nAvailable tools:\n${toolSummary}\n\nYou can call any of these tools directly.`,
             },
           ],
         };
@@ -192,29 +197,42 @@ function createMcpServer(): Server {
           content: [
             {
               type: "text",
-              text: `Syncro MCP Server Status\n\nCurrent domain: ${currentDomain || "(none - at main menu)"}\nCredentials: ${credStatus}\nAvailable domains: ${getAvailableDomains().join(", ")}\nRate limit: 180 requests/minute`,
+              text: `Syncro MCP Server Status\n\nCredentials: ${credStatus}\nAvailable domains: ${getAvailableDomains().join(", ")}\nRate limit: 180 requests/minute\n\nAll tools are available at all times. Use syncro_navigate to discover tools by domain.`,
             },
           ],
         };
       }
 
-      if (currentDomain !== null) {
-        const handler = await getDomainHandler(currentDomain);
-        const domainTools = handler.getTools();
-        const toolExists = domainTools.some((t) => t.name === name);
+      // Route to appropriate domain handler
+      const toolArgs = (args ?? {}) as Record<string, unknown>;
 
-        if (toolExists) {
-          return await handler.handleCall(name, args as Record<string, unknown>);
-        }
+      if (name.startsWith("syncro_customers_")) {
+        const handler = await getDomainHandler("customers");
+        return await handler.handleCall(name, toolArgs);
+      }
+      if (name.startsWith("syncro_tickets_")) {
+        const handler = await getDomainHandler("tickets");
+        return await handler.handleCall(name, toolArgs);
+      }
+      if (name.startsWith("syncro_assets_")) {
+        const handler = await getDomainHandler("assets");
+        return await handler.handleCall(name, toolArgs);
+      }
+      if (name.startsWith("syncro_contacts_")) {
+        const handler = await getDomainHandler("contacts");
+        return await handler.handleCall(name, toolArgs);
+      }
+      if (name.startsWith("syncro_invoices_")) {
+        const handler = await getDomainHandler("invoices");
+        return await handler.handleCall(name, toolArgs);
       }
 
+      // Unknown tool
       return {
         content: [
           {
             type: "text",
-            text: currentDomain
-              ? `Unknown tool: ${name}. You are currently in the ${currentDomain} domain. Use syncro_back to return to the main menu.`
-              : `Unknown tool: ${name}. Use syncro_navigate to select a domain first.`,
+            text: `Unknown tool: ${name}. Use syncro_navigate to discover available tools by domain.`,
           },
         ],
         isError: true,
@@ -370,7 +388,7 @@ async function main() {
     const server = createMcpServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("Syncro MCP server running on stdio (decision tree mode)");
+    console.error("Syncro MCP server running on stdio");
   }
 }
 
