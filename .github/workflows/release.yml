@@ -37,6 +37,10 @@ jobs:
     permissions:
       contents: write
       issues: write
+      packages: write
+    outputs:
+      version: ${{ steps.release-version.outputs.version }}
+      released: ${{ steps.release-version.outputs.released }}
     steps:
       - uses: actions/checkout@v4
         with:
