@@ -18,8 +18,52 @@ A Model Context Protocol (MCP) server for Syncro MSP, implementing a decision tr
 
 ## Installation
 
+> WYRE MCP servers are distributed via OCI/GHCR images and (where available) MCPB bundles. There is no npm package — `npm install @wyre-technology/syncro-mcp` will return 404.
+
+### Option 1: WYRE MCP Gateway (Recommended)
+
+Use the hosted gateway at [mcp.wyre.ai](https://mcp.wyre.ai) — paste your Syncro API key into the gateway UI and you're done.
+
+```json
+{
+  "mcpServers": {
+    "syncro": {
+      "type": "http",
+      "url": "https://mcp.wyre.ai/v1/syncro/mcp",
+      "headers": {
+        "X-Syncro-Api-Key": "${SYNCRO_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+### Option 2: Claude Code CLI (run from GitHub)
+
 ```bash
-npm install @wyre-technology/syncro-mcp
+claude mcp add syncro \
+  -e SYNCRO_API_KEY=your-api-key \
+  -e SYNCRO_SUBDOMAIN=your-subdomain \
+  -- npx -y github:wyre-technology/syncro-mcp
+```
+
+### Option 3: Docker (GHCR)
+
+```bash
+docker run --rm \
+  -e SYNCRO_API_KEY=your-api-key \
+  -e SYNCRO_SUBDOMAIN=your-subdomain \
+  ghcr.io/wyre-technology/syncro-mcp:latest
+```
+
+### Option 4: From Source
+
+```bash
+git clone https://github.com/wyre-technology/syncro-mcp.git
+cd syncro-mcp
+npm ci
+npm run build
+node dist/index.js
 ```
 
 ## Configuration
@@ -36,34 +80,6 @@ Set the following environment variables:
 1. Log in to your Syncro MSP account
 2. Navigate to Settings > API Tokens
 3. Generate a new API token with appropriate permissions
-
-## Usage
-
-### With Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "syncro": {
-      "command": "npx",
-      "args": ["@wyre-technology/syncro-mcp"],
-      "env": {
-        "SYNCRO_API_KEY": "your-api-key"
-      }
-    }
-  }
-}
-```
-
-### With Docker
-
-```bash
-docker build --secret id=npmrc,src=$HOME/.npmrc -t syncro-mcp .
-
-docker run -e SYNCRO_API_KEY=your-api-key syncro-mcp
-```
 
 ## Architecture
 
