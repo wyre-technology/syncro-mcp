@@ -43,7 +43,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Capture pre-release version
-        run: echo "PRE_VERSION=$(node -p \"require('./package.json').version\")" >> "$GITHUB_ENV"
+        run: |
+          PRE_VERSION=$(node -p "require('./package.json').version")
+          echo "PRE_VERSION=$PRE_VERSION" >> "$GITHUB_ENV"
 
       - name: Semantic Release
         env:
