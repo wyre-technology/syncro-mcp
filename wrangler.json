@@ -1,6 +1,6 @@
 {
   "name": "syncro-mcp",
-  "main": "dist/worker.js",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-02-01",
   "compatibility_flags": ["nodejs_compat"]
 }

@@ -9,6 +9,19 @@ A Model Context Protocol (MCP) server for Syncro MSP, implementing a decision tr
 
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/wyre-technology/syncro-mcp)
 
+> **Operator note — GitHub Packages authentication (required for one-click deploys).**
+> This server depends on the private `@wyre-technology/node-syncro` SDK, which is
+> hosted on **GitHub Packages**. GitHub Packages requires an authentication token
+> on every install (no anonymous reads, even for public packages), so the cloud
+> builders fail during `npm install` with `401 Unauthorized` unless you supply a
+> token. Create a GitHub **Personal Access Token** with the `read:packages` scope
+> and provide it to the builder:
+>
+> - **Cloudflare Workers** — set a build/environment variable named `NODE_AUTH_TOKEN` to your PAT.
+> - **DigitalOcean App Platform** — set a **build-time** secret named `GITHUB_TOKEN` to your PAT.
+>
+> For local `npm install`, run `export NODE_AUTH_TOKEN=$(gh auth token)` first.
+
 ## Features
 
 - **Decision Tree Architecture**: Tools are organized by domain and loaded lazily
@@ -18,7 +31,7 @@ A Model Context Protocol (MCP) server for Syncro MSP, implementing a decision tr
 
 ## Installation
 
-> WYRE MCP servers are distributed via OCI/GHCR images and (where available) MCPB bundles. There is no npm package — `npm install @wyre-technology/syncro-mcp` will return 404.
+> WYRE MCP servers are distributed via OCI/GHCR images and (where available) MCPB bundles. The npm package `@wyre-technology/syncro-mcp` is also published to **GitHub Packages** (`npm.pkg.github.com`); installing it requires an authenticated `.npmrc` with `read:packages` scope (run `export NODE_AUTH_TOKEN=$(gh auth token)` locally).
 
 ### Option 1: WYRE MCP Gateway (Recommended)
 
@@ -338,7 +351,9 @@ Syncro API has a rate limit of 180 requests per minute. The underlying `@wyre-te
 ## Development
 
 ```bash
-# Install dependencies
+# Install dependencies. The @wyre-technology/node-syncro SDK lives on GitHub
+# Packages, so authenticate first:
+export NODE_AUTH_TOKEN=$(gh auth token)
 npm install
 
 # Build
