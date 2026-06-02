@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- **Published to GitHub Packages.** Enabled npm publishing for the already-scoped `@wyre-technology/syncro-mcp` package: `@semantic-release/npm` `npmPublish` is now `true` and `publishConfig.registry` points at `npm.pkg.github.com`. The release workflow already configured an authenticated `.npmrc` and `packages: write`. Updated the README, which previously stated there was no npm package. The GHCR image name and `io.github.wyre-technology/syncro-mcp` MCP Registry identifier are unchanged.
+
 ### Fixed
 
 - **deploy:** authenticate GitHub Packages in one-click cloud builds so the

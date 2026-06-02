@@ -31,7 +31,7 @@ A Model Context Protocol (MCP) server for Syncro MSP, implementing a decision tr
 
 ## Installation
 
-> WYRE MCP servers are distributed via OCI/GHCR images and (where available) MCPB bundles. There is no npm package — `npm install @wyre-technology/syncro-mcp` will return 404.
+> WYRE MCP servers are distributed via OCI/GHCR images and (where available) MCPB bundles. The npm package `@wyre-technology/syncro-mcp` is also published to **GitHub Packages** (`npm.pkg.github.com`); installing it requires an authenticated `.npmrc` with `read:packages` scope (run `export NODE_AUTH_TOKEN=$(gh auth token)` locally).
 
 ### Option 1: WYRE MCP Gateway (Recommended)
 
