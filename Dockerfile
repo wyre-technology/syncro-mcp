@@ -5,6 +5,12 @@ FROM node:22-alpine AS builder
 ARG VERSION="unknown"
 ARG COMMIT_SHA="unknown"
 ARG BUILD_DATE="unknown"
+# GitHub PAT with read:packages, used only to install @wyre-technology/* from
+# GitHub Packages. Build-time only; never baked into the final image.
+# DigitalOcean App Platform supplies this as a build-time env var (it does not
+# support BuildKit secret mounts), so we accept it both as a build ARG and via
+# the NPM_TOKEN secret mount used by CI / local docker buildx.
+ARG GITHUB_TOKEN=""
 
 # Set working directory
 WORKDIR /app
@@ -16,10 +22,13 @@ COPY package*.json ./
 COPY .npmrc ./
 
 # Install dependencies (--ignore-scripts prevents 'prepare' from running before source is copied)
-# Mount the NPM_TOKEN secret for GitHub Packages authentication
+# Authenticate to GitHub Packages using either the NPM_TOKEN BuildKit secret
+# (CI / local docker buildx) or the GITHUB_TOKEN build ARG (DigitalOcean).
 RUN --mount=type=secret,id=NPM_TOKEN \
     if [ -f /run/secrets/NPM_TOKEN ]; then \
       echo "//npm.pkg.github.com/:_authToken=$(cat /run/secrets/NPM_TOKEN)" >> .npmrc; \
+    elif [ -n "${GITHUB_TOKEN}" ]; then \
+      echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> .npmrc; \
     fi && \
     npm ci --ignore-scripts && \
     sed -i '/_authToken/d' .npmrc

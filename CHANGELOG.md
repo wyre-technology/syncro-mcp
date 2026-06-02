@@ -1,3 +1,18 @@
+## [Unreleased]
+
+### Fixed
+
+- **deploy:** authenticate GitHub Packages in one-click cloud builds so the
+  private `@wyre-technology/node-syncro` SDK can be installed. Added the
+  `_authToken` line to `.npmrc`, a `GITHUB_TOKEN` build ARG fallback to the
+  Dockerfile (DigitalOcean App Platform does not support BuildKit secret
+  mounts), and a build-time `GITHUB_TOKEN` secret to `.do/app.yaml`. Previously
+  `npm install` failed with `401 Unauthorized` during Cloudflare/DigitalOcean
+  deploys.
+- **deploy:** point the Wrangler entry at the real Worker source
+  (`wrangler.json` `main` -> `src/worker.ts`) instead of the never-built
+  `dist/worker.js`.
+
 ## [1.1.6](https://github.com/wyre-technology/syncro-mcp/compare/v1.1.5...v1.1.6) (2026-04-07)
 
 

@@ -8,6 +8,9 @@ services:
     health_check:
       http_path: /health
     envs:
+      - key: GITHUB_TOKEN
+        scope: BUILD_TIME
+        type: SECRET
       - key: MCP_TRANSPORT
         value: http
       - key: AUTH_MODE
