@@ -5,3 +5,6 @@ dist/
 .DS_Store
 coverage/
 .npmrc.docker
+
+# Cloudflare Workers
+.wrangler/
