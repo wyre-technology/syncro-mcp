@@ -7,14 +7,14 @@ import { getCredentials, getClient, clearClient } from "../../src/utils/client.j
 
 // Mock the Syncro client module
 vi.mock("@wyre-technology/node-syncro", () => ({
-  SyncroClient: vi.fn().mockImplementation((config) => ({
+  SyncroClient: vi.fn().mockImplementation(function (config) { return ({
     config,
     customers: { list: vi.fn(), get: vi.fn(), create: vi.fn() },
     tickets: { list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), addComment: vi.fn() },
     assets: { list: vi.fn(), get: vi.fn() },
     contacts: { list: vi.fn(), get: vi.fn(), create: vi.fn() },
     invoices: { list: vi.fn(), get: vi.fn(), create: vi.fn(), email: vi.fn() },
-  })),
+  }) }),
 }));
 
 describe("client.ts", () => {
