@@ -7,6 +7,7 @@
 
 import type { SyncroClient } from "@wyre-technology/node-syncro";
 import { getRequestCredentials } from "./credential-store.js";
+import { cleanCredential } from "./clean-credential.js";
 
 export interface SyncroCredentials {
   apiKey: string;
@@ -19,17 +20,22 @@ let _credentials: SyncroCredentials | null = null;
 /**
  * Get credentials from the per-request store (gateway mode) or
  * environment variables (stdio / env mode).
+ *
+ * This is the single chokepoint feeding the Syncro SDK, so every value is run
+ * through {@link cleanCredential} here. That strips unresolved MCPB/DXT
+ * `"${user_config.X}"` placeholders (issue #73) regardless of whether they
+ * arrived via env vars, HTTP headers, or Worker secrets.
  */
 export function getCredentials(): SyncroCredentials | null {
-  // Per-request credentials take priority (gateway HTTP mode)
+  // Per-request credentials take priority (gateway HTTP mode); otherwise fall
+  // back to environment variables (stdio / env mode).
   const reqCreds = getRequestCredentials();
-  if (reqCreds) {
-    return reqCreds;
-  }
-
-  // Fall back to environment variables
-  const apiKey = process.env.SYNCRO_API_KEY;
-  const subdomain = process.env.SYNCRO_SUBDOMAIN;
+  const apiKey = cleanCredential(
+    reqCreds ? reqCreds.apiKey : process.env.SYNCRO_API_KEY
+  );
+  const subdomain = cleanCredential(
+    reqCreds ? reqCreds.subdomain : process.env.SYNCRO_SUBDOMAIN
+  );
 
   if (!apiKey) {
     return null;
@@ -47,6 +53,19 @@ export async function getClient(): Promise<SyncroClient> {
   if (!creds) {
     throw new Error(
       "No API credentials provided. Please configure SYNCRO_API_KEY environment variable."
+    );
+  }
+
+  // Syncro cannot build a request host without a subdomain. Fail with a clear
+  // message here rather than letting an absent (or unresolved "${user_config.X}"
+  // placeholder) subdomain reach the SDK, which would otherwise produce a
+  // malformed host like "https://${user_config.syncro_subdomain}.syncromsp.com"
+  // that DNS-fails on every request. See issue #73.
+  if (!creds.subdomain) {
+    throw new Error(
+      "SYNCRO_SUBDOMAIN is required. Please configure the SYNCRO_SUBDOMAIN " +
+        "environment variable with your Syncro subdomain " +
+        '(e.g. "acme" for acme.syncromsp.com).'
     );
   }
 

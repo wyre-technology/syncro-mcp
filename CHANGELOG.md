@@ -6,6 +6,15 @@
 
 ### Fixed
 
+- **credentials:** ignore unresolved MCPB/DXT `"${user_config.X}"` placeholders
+  in credentials. When an optional user_config field (e.g. the Syncro subdomain)
+  is left blank, Claude Desktop injects the literal string
+  `${user_config.syncro_subdomain}` instead of an empty value. Previously that
+  truthy placeholder was passed straight to the SDK, which built the host
+  `https://${user_config.syncro_subdomain}.syncromsp.com` and DNS-failed
+  (`ENOTFOUND`) on every request. Credentials are now sanitised at ingress via
+  `cleanCredential`, and a missing/placeholder subdomain fails fast with a clear
+  `SYNCRO_SUBDOMAIN is required` error. Mirrors wyre-technology/itglue-mcp#73.
 - **deploy:** authenticate GitHub Packages in one-click cloud builds so the
   private `@wyre-technology/node-syncro` SDK can be installed. Added the
   `_authToken` line to `.npmrc`, a `GITHUB_TOKEN` build ARG fallback to the

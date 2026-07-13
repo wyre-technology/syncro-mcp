@@ -62,6 +62,26 @@ describe("client.ts", () => {
         subdomain: "mycompany",
       });
     });
+
+    // Regression: issue #73 — a blank OPTIONAL user_config field in an MCPB/DXT
+    // bundle injects the literal "${user_config.syncro_subdomain}" string.
+    it("should treat an unresolved subdomain placeholder as absent", () => {
+      process.env.SYNCRO_API_KEY = "test-api-key";
+      process.env.SYNCRO_SUBDOMAIN = "${user_config.syncro_subdomain}";
+
+      const creds = getCredentials();
+      expect(creds).toEqual({
+        apiKey: "test-api-key",
+        subdomain: undefined,
+      });
+    });
+
+    it("should treat an unresolved api key placeholder as absent (null)", () => {
+      process.env.SYNCRO_API_KEY = "${user_config.syncro_api_key}";
+      process.env.SYNCRO_SUBDOMAIN = "mycompany";
+
+      expect(getCredentials()).toBeNull();
+    });
   });
 
   describe("getClient", () => {
@@ -88,6 +108,7 @@ describe("client.ts", () => {
 
     it("should return cached client on subsequent calls", async () => {
       process.env.SYNCRO_API_KEY = "test-api-key";
+      process.env.SYNCRO_SUBDOMAIN = "acme";
 
       const client1 = await getClient();
       const client2 = await getClient();
@@ -100,12 +121,13 @@ describe("client.ts", () => {
       const mockSyncroClient = vi.mocked(SyncroClient);
 
       process.env.SYNCRO_API_KEY = "first-api-key";
+      process.env.SYNCRO_SUBDOMAIN = "acme";
       await getClient();
 
       // Verify first call with first credentials
       expect(mockSyncroClient).toHaveBeenCalledWith({
         apiKey: "first-api-key",
-        subdomain: undefined,
+        subdomain: "acme",
       });
 
       // Clear and change credentials
@@ -118,7 +140,7 @@ describe("client.ts", () => {
       // Verify second call with new credentials
       expect(mockSyncroClient).toHaveBeenCalledWith({
         apiKey: "second-api-key",
-        subdomain: undefined,
+        subdomain: "acme",
       });
     });
 
@@ -149,11 +171,35 @@ describe("client.ts", () => {
         subdomain: "company2",
       });
     });
+
+    it("should throw a clear error when SYNCRO_SUBDOMAIN is missing", async () => {
+      process.env.SYNCRO_API_KEY = "test-api-key";
+      delete process.env.SYNCRO_SUBDOMAIN;
+
+      await expect(getClient()).rejects.toThrow("SYNCRO_SUBDOMAIN is required");
+    });
+
+    // Regression: issue #73 — the blank-field placeholder must NEVER be passed
+    // to the SDK (which would build "https://${user_config.syncro_subdomain}
+    // .syncromsp.com" and DNS-fail on every request). Instead we fail fast with
+    // a clear "required" error and never construct the client.
+    it("should reject an unresolved subdomain placeholder instead of building a bogus host", async () => {
+      const { SyncroClient } = await import("@wyre-technology/node-syncro");
+      const mockSyncroClient = vi.mocked(SyncroClient);
+
+      process.env.SYNCRO_API_KEY = "test-api-key";
+      process.env.SYNCRO_SUBDOMAIN = "${user_config.syncro_subdomain}";
+
+      await expect(getClient()).rejects.toThrow("SYNCRO_SUBDOMAIN is required");
+      // The placeholder never reached the SDK constructor.
+      expect(mockSyncroClient).not.toHaveBeenCalled();
+    });
   });
 
   describe("clearClient", () => {
     it("should clear the cached client", async () => {
       process.env.SYNCRO_API_KEY = "test-api-key";
+      process.env.SYNCRO_SUBDOMAIN = "acme";
 
       const client1 = await getClient();
       clearClient();
