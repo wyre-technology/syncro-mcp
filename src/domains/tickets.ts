@@ -8,6 +8,7 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { DomainHandler, CallToolResult } from "../utils/types.js";
 import { getClient } from "../utils/client.js";
 import { elicitSelection } from "../utils/elicitation.js";
+import { buildTicketCard, TICKET_CARD_META } from "../card.builder.js";
 
 /**
  * Get ticket domain tools
@@ -69,6 +70,7 @@ function getTools(): Tool[] {
       name: "syncro_tickets_get",
       description:
         "Get details for a specific ticket by its ID, including comments",
+      _meta: TICKET_CARD_META,
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -163,6 +165,7 @@ function getTools(): Tool[] {
     {
       name: "syncro_tickets_add_comment",
       description: "Add a comment to an existing ticket",
+      _meta: TICKET_CARD_META,
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -272,8 +275,19 @@ async function handleCall(
       const ticketId = args.ticket_id as number;
       const ticket = await client.tickets.get(ticketId);
 
+      // MCP Apps: attach the normalized card payload the ui:// ticket card
+      // renders from. Best-effort — any failure just means no UI surface,
+      // never a failed tool result.
+      const payload: Record<string, unknown> = { ...ticket };
+      try {
+        const card = await buildTicketCard(payload, client);
+        if (card) payload._card = card;
+      } catch {
+        /* card is progressive enhancement — serve the plain JSON */
+      }
+
       return {
-        content: [{ type: "text", text: JSON.stringify(ticket, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
       };
     }
 
