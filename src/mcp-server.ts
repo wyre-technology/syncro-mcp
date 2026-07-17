@@ -20,6 +20,7 @@ import { getDomainHandler, getAvailableDomains } from "./domains/index.js";
 import { isDomainName, type DomainName } from "./utils/types.js";
 import { getCredentials } from "./utils/client.js";
 import { setServerRef } from "./utils/server-ref.js";
+import { registerResourceHandlers } from "./resources.js";
 import type { RequestCredentials } from "./utils/credential-store.js";
 
 export type { RequestCredentials as SyncroCredentials };
@@ -171,10 +172,12 @@ export function createMcpServer(): Server {
     {
       capabilities: {
         tools: {},
+        resources: {},
       },
     }
   );
   setServerRef(server);
+  registerResourceHandlers(server);
 
   /**
    * Handle ListTools requests - always returns ALL tools

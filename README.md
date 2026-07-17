@@ -28,6 +28,7 @@ A Model Context Protocol (MCP) server for Syncro MSP, implementing a decision tr
 - **Domain Navigation**: Navigate between customers, tickets, assets, contacts, and invoices
 - **Lazy Loading**: Domain handlers and the Syncro client are loaded on-demand
 - **Full Syncro API Coverage**: Access to key Syncro MSP functionality
+- **Interactive Ticket Card (MCP Apps)**: `syncro_tickets_get` renders as an interactive card in MCP Apps hosts (Claude Desktop/web) with an in-card "Add comment" round-trip via `syncro_tickets_add_comment` (internal-only by default); plain-JSON behavior is unchanged in other hosts. The card is neutral by default, brandable via `window.__BRAND__` injection or `MCP_BRAND_*` env vars (`MCP_BRAND_NAME`, `MCP_BRAND_LOGO_URL`, `MCP_BRAND_PRIMARY_COLOR`, `MCP_BRAND_ACCENT_COLOR`, `MCP_BRAND_BG`, `MCP_BRAND_TEXT`) — no rebuild needed.
 
 ## Installation
 
