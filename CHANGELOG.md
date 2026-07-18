@@ -12,6 +12,14 @@
 
 ### Fixed
 
+- **deps:** bump `@wyre-technology/node-syncro` to
+  [v1.0.5](https://github.com/wyre-technology/node-syncro/releases/tag/v1.0.5),
+  which reads each HTTP response body exactly once. Previously the SDK's error
+  path could re-read an already-consumed response body, swallowing the real API
+  error and surfacing an empty `{}` instead; API failures now propagate as
+  descriptive errors. Same class of bug as
+  [connectwise-automate-mcp#54](https://github.com/wyre-technology/connectwise-automate-mcp/issues/54),
+  where the pattern was first identified.
 - **credentials:** ignore unresolved MCPB/DXT `"${user_config.X}"` placeholders
   in credentials. When an optional user_config field (e.g. the Syncro subdomain)
   is left blank, Claude Desktop injects the literal string
